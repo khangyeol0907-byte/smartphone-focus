@@ -221,8 +221,40 @@ st.write(
 )
 if y.nunique() == 1:
     st.caption("참고: 집중도 값이 모두 같아 R²는 해석에 주의가 필요합니다.")
+    st.header("5. 분석 결과 해석")
 
-st.header("5. 새로운 사용 시간으로 집중도 예측하기")
+st.subheader("회귀 분석 결과")
+
+if slope < 0:
+    st.write(
+        f"스마트폰 사용 시간이 1시간 증가할 때 "
+        f"예측 집중도는 약 {abs(slope):.2f}점 낮아지는 경향입니다."
+    )
+elif slope > 0:
+    st.write(
+        f"스마트폰 사용 시간이 1시간 증가할 때 "
+        f"예측 집중도는 약 {slope:.2f}점 높아지는 경향입니다."
+    )
+else:
+    st.write("스마트폰 사용 시간에 따른 뚜렷한 집중도 변화가 나타나지 않습니다.")
+
+st.subheader("모델 평가 결과 해석")
+
+if 0 <= r2 <= 1:
+    st.write(f"현재 회귀모델은 데이터 변화의 약 {r2 * 100:.1f}%를 설명합니다.")
+else:
+    st.write("현재 모델의 설명력이 낮아 데이터의 경향을 잘 설명하지 못할 수 있습니다.")
+
+st.write(f"MAE는 약 {mae:.2f}점으로, 예측값과 실제값의 평균적인 차이를 나타냅니다.")
+st.write(f"RMSE는 약 {rmse:.2f}점으로, 큰 예측 오차에 더 민감한 지표입니다.")
+
+st.info(
+    f"이번 분석은 정상 데이터 {len(clean_data)}개를 이용했습니다. "
+    "학습에 사용한 데이터로 모델을 평가했으므로, "
+    "새로운 데이터에서도 같은 정확도가 나온다고 보장할 수 없습니다."
+)
+
+st.header("6. 새로운 사용 시간으로 집중도 예측하기")
 hours = st.number_input(
     "하루 스마트폰 사용 시간(시간)을 입력하세요.",
     min_value=0.0,
@@ -237,7 +269,7 @@ if st.button("예상 집중도 확인"):
     st.success(f"예상 수업 집중도는 약 {predicted_score:.1f}점입니다.")
     st.caption("예측값은 입력된 데이터의 경향을 이용한 참고용 추정치이며 실제 집중도를 확정하지 않습니다.")
 
-st.header("6. 분석 데이터 다운로드")
+st.header("7. 분석 데이터 다운로드")
 csv_data = clean_data.to_csv(index=False).encode("utf-8-sig")
 st.download_button(
     label="분석 데이터 CSV 다운로드",
