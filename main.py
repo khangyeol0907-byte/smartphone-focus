@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,274 +7,309 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 st.set_page_config(
-    page_title="스마트폰 사용 시간과 수업 집중도 분석",
+    page_title="소셜미디어 사용과 학습 집중도 분석",
     page_icon="📱",
     layout="wide"
 )
 
-st.title("📱 스마트폰 사용 시간과 수업 집중도 분석")
-st.write("학생들의 하루 스마트폰 사용 시간과 수업 집중도 사이의 관계를 알아보는 프로젝트입니다.")
-
-st.info(
-    "처음 표시되는 값은 웹앱 작동을 확인하기 위한 예시 데이터입니다. "
-    "실제 설문조사 결과가 아니므로, 수행평가에서는 설문조사로 수집한 데이터로 바꿔서 분석하세요."
+st.title("📱 소셜미디어 사용과 학습 집중도 분석")
+st.write(
+    "학생들의 소셜미디어 사용 습관과 학습 집중도 및 학업 생산성의 관계를 분석합니다."
 )
 
-x_name = "스마트폰 사용 시간(시간)"
-y_name = "수업 집중도(1~5점)"
-required_columns = [x_name, y_name]
+st.info(
+    "CSV 파일을 업로드하면 실제 데이터로 분석합니다. "
+    "파일이 없을 때는 기능 확인용 예시 데이터가 표시됩니다."
+)
 
+# 예시 데이터: 실제 조사 결과가 아님
 sample_data = pd.DataFrame({
-    x_name: [1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7],
-    y_name: [5, 4, 5, 4, 3, 4, 3, 2, 3, 1]
+    "SocialMediaHours": [1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7],
+    "FocusReduction": [0, 1, 0, 1, 1, 2, 2, 2, 3, 3],
+    "Procrastination": [0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
+    "UsageDuringStudy": [0, 1, 0, 1, 1, 2, 2, 2, 3, 3]
 })
 
+# 1. 데이터 입력
 st.header("1. 데이터 입력")
-st.write("표의 숫자를 직접 수정하거나, 설문조사 결과가 담긴 CSV 파일을 업로드할 수 있습니다.")
 
-uploaded_file = st.file_uploader("설문조사 CSV 파일 업로드", type=["csv"])
+uploaded_file = st.file_uploader(
+    "외부 설문조사 CSV 파일 업로드",
+    type=["csv"]
+)
 
-source_name = "직접 입력한 데이터"
 if uploaded_file is not None:
     try:
-        uploaded_data = pd.read_csv(uploaded_file)
-        # 이전 파일에서 사용했던 짧은 열 이름도 호환되도록 변환
-        uploaded_data = uploaded_data.rename(columns={
-            "사용 시간": x_name,
-            "집중도": y_name
-        })
+        try:
+            data = pd.read_csv(uploaded_file)
+        except UnicodeDecodeError:
+            uploaded_file.seek(0)
+            data = pd.read_csv(uploaded_file, encoding="cp949")
 
-        missing_columns = [col for col in required_columns if col not in uploaded_data.columns]
-        if missing_columns:
-            st.error(
-                "CSV 파일의 열 이름이 올바르지 않습니다. "
-                f"필요한 열 이름은 '{x_name}', '{y_name}'입니다. "
-                f"빠진 열: {', '.join(missing_columns)}"
-            )
-            st.stop()
+        source_name = "외부 CSV 데이터"
 
-        extra_columns = [col for col in uploaded_data.columns if col not in required_columns]
-        if extra_columns:
-            st.warning(
-                "분석에 필요한 두 열 이외의 열은 분석에서 제외합니다: "
-                + ", ".join(map(str, extra_columns))
-            )
-
-        data = uploaded_data[required_columns].copy()
-        source_name = "업로드한 CSV 데이터"
-
-    except Exception as error:
-        st.error(f"CSV 파일을 읽는 중 문제가 발생했습니다: {error}")
+    except Exception as e:
+        st.error(f"파일을 읽을 수 없습니다: {e}")
         st.stop()
 else:
     data = sample_data.copy()
+    source_name = "기능 확인용 예시 데이터"
 
 st.caption(f"현재 데이터 출처: {source_name}")
 
-st.write("아래 표에서 값을 직접 수정할 수 있습니다. 사용 시간은 0~24, 집중도는 1~5 사이의 정수여야 합니다.")
-edited_data = st.data_editor(
-    data,
-    num_rows="dynamic",
-    use_container_width=True,
-    column_config={
-        x_name: st.column_config.NumberColumn(
-            x_name, min_value=0.0, max_value=24.0, step=0.5,
-            help="0시간 이상 24시간 이하로 입력하세요."
-        ),
-        y_name: st.column_config.NumberColumn(
-            y_name, min_value=1, max_value=5, step=1,
-            help="1점부터 5점까지의 정수로 입력하세요."
-        )
-    }
+if data.empty:
+    st.warning("데이터가 비어 있습니다.")
+    st.stop()
+
+st.write("데이터 미리보기")
+st.dataframe(data.head(10), use_container_width=True)
+
+st.metric("전체 데이터 행 수", f"{len(data)}개")
+st.metric("전체 변수 수", f"{len(data.columns)}개")
+
+# 2. 변수 선택
+st.header("2. 분석 변수 선택")
+
+numeric_columns = data.select_dtypes(include=np.number).columns.tolist()
+
+if len(numeric_columns) < 2:
+    st.error("분석을 위해 숫자로 된 변수가 최소 2개 필요합니다.")
+    st.stop()
+
+default_x = (
+    "SocialMediaHours"
+    if "SocialMediaHours" in numeric_columns
+    else numeric_columns[0]
 )
 
-# 데이터 검증: 빈 행은 사용자가 표에 추가한 미입력 행일 수 있으므로
-# 완전히 비어 있는 행은 오류 개수에 포함하지 않고 분석에서도 제외한다.
-raw = edited_data[required_columns].copy()
-row_has_any_value = raw.notna().any(axis=1)
-raw_nonempty = raw.loc[row_has_any_value].copy()
+default_y = (
+    "FocusReduction"
+    if "FocusReduction" in numeric_columns
+    else numeric_columns[1]
+)
 
-numeric_x = pd.to_numeric(raw_nonempty[x_name], errors="coerce")
-numeric_y = pd.to_numeric(raw_nonempty[y_name], errors="coerce")
+col1, col2 = st.columns(2)
 
-valid_x = numeric_x.notna() & numeric_x.between(0, 24)
-valid_y_range = numeric_y.notna() & numeric_y.between(1, 5)
-valid_y_integer = numeric_y.notna() & np.isclose(numeric_y.fillna(0) % 1, 0)
-valid_rows = valid_x & valid_y_range & valid_y_integer
-
-invalid_count = int((~valid_rows).sum())
-clean_data = pd.DataFrame({
-    x_name: numeric_x.loc[valid_rows].astype(float),
-    y_name: numeric_y.loc[valid_rows].astype(int)
-}).reset_index(drop=True)
-
-st.subheader("데이터 검증 결과")
-col_a, col_b, col_c = st.columns(3)
-col_a.metric("입력된 데이터 행", f"{len(raw_nonempty)}개")
-col_b.metric("정상 데이터", f"{len(clean_data)}개")
-col_c.metric("제외된 잘못된 데이터", f"{invalid_count}개")
-
-if invalid_count > 0:
-    st.warning(
-        f"잘못된 데이터 {invalid_count}개를 확인했습니다. "
-        "빈 값, 숫자가 아닌 값, 사용 시간 범위(0~24시간) 초과, "
-        "집중도 범위(1~5점) 초과 또는 집중도 소수점 값은 분석에서 제외했습니다."
+with col1:
+    x_name = st.selectbox(
+        "독립변수 (X)",
+        numeric_columns,
+        index=numeric_columns.index(default_x)
     )
-if len(raw_nonempty) == 0:
-    st.info("분석할 데이터가 없습니다. 표에 값을 입력하거나 CSV 파일을 업로드하세요.")
-    st.stop()
 
-st.caption("분석에는 검증을 통과한 정상 데이터만 사용합니다.")
+with col2:
+    y_options = [c for c in numeric_columns if c != x_name]
+    y_default = y_options.index(default_y) if default_y in y_options else 0
 
-st.header("2. 데이터 소개")
-metric1, metric2, metric3 = st.columns(3)
-metric1.metric("정상 데이터 수", f"{len(clean_data)}명")
-if len(clean_data) > 0:
-    metric2.metric("평균 스마트폰 사용 시간", f"{clean_data[x_name].mean():.1f}시간")
-    metric3.metric("평균 수업 집중도", f"{clean_data[y_name].mean():.2f}점")
-else:
-    metric2.metric("평균 스마트폰 사용 시간", "-")
-    metric3.metric("평균 수업 집중도", "-")
+    y_name = st.selectbox(
+        "종속변수 (Y)",
+        y_options,
+        index=y_default
+    )
 
-st.subheader("정상적으로 입력된 데이터")
-st.dataframe(clean_data, use_container_width=True)
+st.caption(
+    "소셜미디어 사용 시간과 집중력 저하를 기본 분석 변수로 설정했습니다. "
+    "다른 숫자형 변수를 선택해 관계를 비교할 수도 있습니다."
+)
+
+# 3. 데이터 검증
+st.header("3. 데이터 검증")
+
+analysis_data = data[[x_name, y_name]].copy()
+
+for col in [x_name, y_name]:
+    analysis_data[col] = pd.to_numeric(
+        analysis_data[col], errors="coerce"
+    )
+
+original_count = len(analysis_data)
+
+analysis_data = analysis_data.replace(
+    [np.inf, -np.inf], np.nan
+)
+
+clean_data = analysis_data.dropna().copy()
+
+removed_count = original_count - len(clean_data)
+
+a, b, c = st.columns(3)
+a.metric("원본 데이터", f"{original_count}개")
+b.metric("정상 데이터", f"{len(clean_data)}개")
+c.metric("제외된 데이터", f"{removed_count}개")
+
+if removed_count > 0:
+    st.warning(
+        f"결측값이나 숫자가 아닌 값 등 {removed_count}개 행을 제외했습니다."
+    )
 
 if len(clean_data) < 3:
-    st.warning(
-        f"정상 데이터가 {len(clean_data)}개입니다. "
-        "기초 통계는 확인할 수 있지만, 안정적인 선형회귀 분석을 위해서는 "
-        "정상 데이터가 최소 3개 필요합니다."
-    )
+    st.warning("분석을 위해 정상 데이터가 최소 3개 필요합니다.")
     st.stop()
+
+st.dataframe(clean_data, use_container_width=True)
+
+# 4. 기초 통계
+st.header("4. 기초 통계 분석")
+
+stats = clean_data.describe().T
+st.dataframe(stats, use_container_width=True)
+
+m1, m2, m3 = st.columns(3)
+m1.metric(f"{x_name} 평균", f"{clean_data[x_name].mean():.2f}")
+m2.metric(f"{y_name} 평균", f"{clean_data[y_name].mean():.2f}")
+m3.metric("분석 데이터 수", f"{len(clean_data)}개")
+
+# 5. 데이터 시각화
+st.header("5. 데이터 시각화")
+
+fig1 = px.histogram(
+    clean_data,
+    x=x_name,
+    title=f"{x_name} 분포",
+    marginal="box"
+)
+st.plotly_chart(fig1, use_container_width=True)
+
+fig2 = px.scatter(
+    clean_data,
+    x=x_name,
+    y=y_name,
+    title=f"{x_name}과 {y_name}의 관계",
+    trendline="ols"
+)
+st.plotly_chart(fig2, use_container_width=True)
+
+# 6. 상관관계 분석
+st.header("6. 상관관계 분석")
+
+correlation = clean_data[x_name].corr(clean_data[y_name])
+
+st.metric("피어슨 상관계수", f"{correlation:.3f}")
+
+if correlation < -0.3:
+    st.write("두 변수 사이에 음의 상관관계가 나타납니다.")
+elif correlation > 0.3:
+    st.write("두 변수 사이에 양의 상관관계가 나타납니다.")
+else:
+    st.write("두 변수 사이의 선형 상관관계가 약하게 나타납니다.")
+
+st.caption(
+    "상관관계는 두 변수의 관련성을 나타내며, 한 변수가 다른 변수의 원인이라는 뜻은 아닙니다."
+)
+
+# 7. 선형회귀 분석
+st.header("7. 선형회귀 분석")
 
 if clean_data[x_name].nunique() < 2:
-    st.warning(
-        "스마트폰 사용 시간이 모두 같아 회귀선을 계산할 수 없습니다. "
-        "서로 다른 사용 시간의 데이터가 2개 이상 포함되도록 입력하세요."
-    )
+    st.warning("독립변수의 값이 모두 같아 회귀분석을 진행할 수 없습니다.")
     st.stop()
 
-# 독립변수와 종속변수 설정
 X = clean_data[[x_name]]
 y = clean_data[y_name]
 
-# 선형회귀 모델 학습
 model = LinearRegression()
 model.fit(X, y)
+
 predictions = model.predict(X)
-
-# 모델 평가
-mae = mean_absolute_error(y, predictions)
-rmse = np.sqrt(mean_squared_error(y, predictions))
-r2 = r2_score(y, predictions) if y.nunique() > 1 else 0.0
-
-st.header("3. 선형회귀 분석")
-st.write("독립변수(X)는 하루 스마트폰 사용 시간이고, 종속변수(Y)는 수업 집중도 점수입니다.")
 
 slope = float(model.coef_[0])
 intercept = float(model.intercept_)
-st.write(f"**회귀식:** 수업 집중도 = {intercept:.2f} + ({slope:.2f} × 스마트폰 사용 시간)")
 
-if slope < 0:
-    st.write("입력된 데이터에서는 스마트폰 사용 시간이 길수록 집중도 점수가 낮아지는 경향이 나타납니다.")
-elif slope > 0:
-    st.write("입력된 데이터에서는 스마트폰 사용 시간이 길수록 집중도 점수가 높아지는 경향이 나타납니다.")
-else:
-    st.write("입력된 데이터에서는 스마트폰 사용 시간에 따른 집중도 변화가 거의 나타나지 않습니다.")
+mae = mean_absolute_error(y, predictions)
+rmse = np.sqrt(mean_squared_error(y, predictions))
 
-chart_data = clean_data.copy()
-chart_data["회귀선 예측값"] = predictions
-
-fig = px.scatter(
-    chart_data,
-    x=x_name,
-    y=y_name,
-    title="스마트폰 사용 시간과 수업 집중도의 관계",
-    labels={
-        x_name: "하루 스마트폰 사용 시간(시간)",
-        y_name: "수업 집중도(1~5점)"
-    },
-    range_y=[0.5, 5.5]
+r2 = (
+    r2_score(y, predictions)
+    if y.nunique() > 1
+    else None
 )
 
-line_x = np.linspace(clean_data[x_name].min(), clean_data[x_name].max(), 100)
-line_y = model.predict(pd.DataFrame({x_name: line_x}))
-line_data = pd.DataFrame({
-    "하루 스마트폰 사용 시간(시간)": line_x,
-    "예상 수업 집중도": line_y
-})
-fig.add_scatter(
-    x=line_data["하루 스마트폰 사용 시간(시간)"],
-    y=line_data["예상 수업 집중도"],
-    mode="lines",
-    name="선형회귀선"
-)
-st.plotly_chart(fig, use_container_width=True)
-
-st.header("4. 모델 평가")
-result1, result2, result3 = st.columns(3)
-result1.metric("결정계수 (R²)", f"{r2:.3f}")
-result2.metric("평균 절대 오차 (MAE)", f"{mae:.2f}")
-result3.metric("평균 제곱근 오차 (RMSE)", f"{rmse:.2f}")
 st.write(
-    "R²는 모델이 데이터의 변화를 얼마나 설명하는지 나타냅니다. "
-    "MAE와 RMSE는 예측값과 실제값의 차이를 나타내며, 값이 작을수록 오차가 작습니다."
+    f"**회귀식:** {y_name} = {intercept:.3f} + "
+    f"({slope:.3f} × {x_name})"
 )
-if y.nunique() == 1:
-    st.caption("참고: 집중도 값이 모두 같아 R²는 해석에 주의가 필요합니다.")
-    st.header("5. 분석 결과 해석")
-
-st.subheader("회귀 분석 결과")
 
 if slope < 0:
     st.write(
-        f"스마트폰 사용 시간이 1시간 증가할 때 "
-        f"예측 집중도는 약 {abs(slope):.2f}점 낮아지는 경향입니다."
+        f"{x_name}이 1 증가할 때 {y_name}의 예측값은 "
+        f"약 {abs(slope):.3f} 감소하는 경향이 있습니다."
     )
 elif slope > 0:
     st.write(
-        f"스마트폰 사용 시간이 1시간 증가할 때 "
-        f"예측 집중도는 약 {slope:.2f}점 높아지는 경향입니다."
+        f"{x_name}이 1 증가할 때 {y_name}의 예측값은 "
+        f"약 {slope:.3f} 증가하는 경향이 있습니다."
     )
 else:
-    st.write("스마트폰 사용 시간에 따른 뚜렷한 집중도 변화가 나타나지 않습니다.")
+    st.write("두 변수 사이에 뚜렷한 선형 변화가 나타나지 않습니다.")
 
-st.subheader("모델 평가 결과 해석")
+# 8. 모델 평가
+st.header("8. 모델 평가")
 
-if 0 <= r2 <= 1:
-    st.write(f"현재 회귀모델은 데이터 변화의 약 {r2 * 100:.1f}%를 설명합니다.")
+r1, r2_col, r3 = st.columns(3)
+
+r1.metric(
+    "결정계수 R²",
+    f"{r2:.3f}" if r2 is not None else "계산 불가"
+)
+r2_col.metric("평균 절대 오차 MAE", f"{mae:.3f}")
+r3.metric("평균 제곱근 오차 RMSE", f"{rmse:.3f}")
+
+st.write(
+    "R²는 모델의 데이터 설명력을 나타냅니다. "
+    "MAE와 RMSE는 예측값과 실제값의 차이를 나타내며, "
+    "일반적으로 값이 작을수록 예측 오차가 작습니다."
+)
+
+st.warning(
+    "현재 평가는 모델을 학습한 데이터에 대한 평가입니다. "
+    "새로운 데이터에 대한 성능을 보장하지 않습니다."
+)
+
+# 9. 새로운 값 예측
+st.header("9. 새로운 값으로 결과 예측")
+
+minimum = float(clean_data[x_name].min())
+maximum = float(clean_data[x_name].max())
+
+if minimum < maximum:
+    new_x = st.number_input(
+        f"{x_name} 입력",
+        min_value=minimum,
+        max_value=maximum,
+        value=float(np.clip(
+            clean_data[x_name].mean(), minimum, maximum
+        ))
+    )
+
+    if st.button("예측 결과 확인"):
+        new_prediction = float(
+            model.predict(pd.DataFrame({x_name: [new_x]}))[0]
+        )
+
+        st.success(
+            f"예측된 {y_name}: {new_prediction:.3f}"
+        )
+
+        st.caption(
+            "예측 결과는 회귀모델에 따른 추정값이며 실제 결과와 다를 수 있습니다."
+        )
 else:
-    st.write("현재 모델의 설명력이 낮아 데이터의 경향을 잘 설명하지 못할 수 있습니다.")
+    st.info("예측을 위해 서로 다른 독립변수 값이 필요합니다.")
 
-st.write(f"MAE는 약 {mae:.2f}점으로, 예측값과 실제값의 평균적인 차이를 나타냅니다.")
-st.write(f"RMSE는 약 {rmse:.2f}점으로, 큰 예측 오차에 더 민감한 지표입니다.")
+# 10. 다운로드
+st.header("10. 분석 데이터 다운로드")
 
-st.info(
-    f"이번 분석은 정상 데이터 {len(clean_data)}개를 이용했습니다. "
-    "학습에 사용한 데이터로 모델을 평가했으므로, "
-    "새로운 데이터에서도 같은 정확도가 나온다고 보장할 수 없습니다."
-)
+csv_data = clean_data.to_csv(
+    index=False
+).encode("utf-8-sig")
 
-st.header("6. 새로운 사용 시간으로 집중도 예측하기")
-hours = st.number_input(
-    "하루 스마트폰 사용 시간(시간)을 입력하세요.",
-    min_value=0.0,
-    max_value=24.0,
-    value=3.0,
-    step=0.5
-)
-
-if st.button("예상 집중도 확인"):
-    predicted_score = float(model.predict(pd.DataFrame({x_name: [hours]}))[0])
-    predicted_score = max(1.0, min(5.0, predicted_score))
-    st.success(f"예상 수업 집중도는 약 {predicted_score:.1f}점입니다.")
-    st.caption("예측값은 입력된 데이터의 경향을 이용한 참고용 추정치이며 실제 집중도를 확정하지 않습니다.")
-
-st.header("7. 분석 데이터 다운로드")
-csv_data = clean_data.to_csv(index=False).encode("utf-8-sig")
 st.download_button(
-    label="분석 데이터 CSV 다운로드",
+    "정제된 분석 데이터 CSV 다운로드",
     data=csv_data,
-    file_name="스마트폰_집중도_데이터.csv",
+    file_name="분석_정제데이터.csv",
     mime="text/csv"
+)
+
+st.caption(
+    "※ 예시 데이터로 표시된 분석 결과는 실제 설문조사 결과가 아닙니다."
 )
